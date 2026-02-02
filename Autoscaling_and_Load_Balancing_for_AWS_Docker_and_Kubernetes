@@ -1,0 +1,125 @@
+Autoscaling and load balancing
+
+Scalability -- Scalability refers to a system's ability to handle increased or decreased load by automatically adding /or removing resources (like EC2 instances) based on demand.
+
+
+2 types of scalability is available
+1)  Horizontal scalability and
+2) vertical scalability
+1)	Vertical scalability – means you can  increase in the existing  resources  like adding more cpu’s and RAM  
+Increase the RAM from 1GB to 2 GB or increase the CPU from t2.micro to t2.medium
+
+2)	Horizontal Scalability – adding or removing the servers
+If load increases – server will be increased
+If load or traffic decreases – the servers will be decreased
+
+High Availability  means keeping your service up and running so its always accessible to user.. example  
+running instances in multiple availability zone.. (so in case due to any issue your AZ’s is goes down still you can access the services from the another AZ’s (availability zone))
+Elasticity  Elasticity means the ability to automatically adjust the resources capacity.. 
+Example - Servers can be increased or decreased as per the load this concept called as elasticity
+
+
+Load Balancing  A Load Balancer (LB)  automatically distributes incoming traffic across multiple resources (like EC2 instances, containers, IPs) in one or more Availability Zones, improving fault tolerance, performance, and scalability.
+
+A load balancer act as a service, load balancer send the request to concern server, it will check that which server is having less load and then sending that request to particular server..
+
+Example  suppose we have 3 servers and on which facebook service is running.. now load balancer is responsible to maintain traffic equally on those 3 servers..--> so server load will not be the problem.. our all the servers will be running smoothly..
+Good practice  when we are configuring the load balancer, then make sure that instance needs to be created in different availability zone through the ASG  reason  if any AZ goes down still you can access the similar request from the other AZ..
+
+Lab Setup 
+ create 2 ec2 instances, and at the time of instance creation, add protocol ssh and http open in SG .. and also add below data for automating the task.. so it will run default at the time of instance creation.. 
+Adding user data while creating the instance.. add below data..
+#!/bin/bash
+sudo apt update -y
+sudo apt install apache2 -y
+sudo systemctl start apache2
+sudo systemctl enable apache2
+echo "<html><h1>Welcome to apache webserver on amazon linux $(hostname)\!</h1></html>" > /var/www/html/index.html
+
+(here we mentioned $hostname  so at the time of cross checking we will get to know that from which server request is coming..)
+
+Now configure the Load Balancer
+Classic load balancer was used in the past  it was used for the previous generation.. (in current condition no one using the classic load balancer)
+
+Now we have 
+1)	Application Load Balancer   we also called as a ALB    for http and https request we are using application load balancer..
+
+2)	Network Load Balancer  Also called an NLB  for tcp,udp and tls protocols we are using the network load balancer
+
+
+3)	Gateway Load Balancer  also called an GLB  Choose a Gateway Load Balancer when you need to deploy and manage a fleet of third-party virtual appliances that support GENEVE. These appliances enable you to improve security, compliance, and policy controls
+
+
+
+
+
+
+
+
+
+We are configuring ALB for this LAB 
+
+1)	Select your  application load balancer option and select create load balancer  
+give name to the load balancer.. 
+ Select scheme (internal and internet-facing)  we are using internet facing here cause we enabled httpd protocol..--> 
+
+select IP address type (ipv4 or ipv6), we are selecting for IPV4..-->
+
+select your VPC  select the subnet (multiple subnet selection is good thing)  
+ select your security group (always create a new security group)   reason previously configured protocol we did for the VPC which is for instance level.. but now here we are creating the SG for our load balancer, 
+hence we need to open port 80 for load balancer as we for receiving the traffic on this port..  create the security group and select that  
+
+now select listner and routing here , because traffic is coming to the port 80 and now in listner we need to tell ALB to where this traffic needs to move  and also select the forward to target group option – so request will be forwarded to the port 80
+
+select your target group (which thing you need to target that you can mention here or create the target group)  
+choose target group (instances/ip addressess/lambda function/application load balancer)  I am selecting instances here  enter target group name  select protocol, ip address type, protocol version, health check (keep default) and now select next..
+
+
+2)	Select register targets  and select your instances ID here  and select create target group..
+
+3)	Select your target group you just did in the previous step   and click on the create load balancer..  	
+
+now you can see the load balancer status is active..  copy the DNS name of load balancer and paste it on browser..  this will give you the error  now come to the resource map tab  now you can see in target group the number is 0 that means target is not associated to ALB.. (in the resource map tab you can see the road map of your ALB)
+
+4)	Now select the Target group  click on register targets  select your both the instances  select include as pending below  and select register pending targets..now on dashboard you can see it will show you 2 targets are registered..  now you can see in road map both the instances are configured and they are healthy..  now refresh the DNS of load balancer  do refresh you can see that ALB is sending traffic to both the instances..  now do one thing stop your 1st instance and do refresh on ALB DNS page on browser you can see that traffic is not moving anywhere, it is on the 1 server  also you can see in the ALB roadmap 1 instance is showing is unhealthy..  now do start your stopped instance to start  then refresh the ALB DNS page you can see again traffic is moving to both the server… 
+
+
+Autoscaling group – Autoscaling group is the service that automatically adds or removes the ec2 instances based on demand to ensure your applications is always available.. it helps to scale up when capacity is needed and scale down during low usage to save the cost.
+ Keeping the right number of servers running at all time..
+
+Note  in the earlier section of load balancing we keep our instances to 2 to check the load distribution, but what if number of users are increased and servers are not able to handle the loads, then we need to create 3/4/5/6 servers so this can be achieved through the autoscaling group.. if user or request increasing and when load decreasing then number of instance should be decrease..
+
+Note  while creating the ASG we must need 2 things and those are AMI and launch template..
+1)	So let us create the image from an instance, which contains the application..  select your instance  go to action  select create image  now you can see image in AMI option…
+
+2)	Select autoscaling group 
+
+3)	Create autoscaling group  enter name to your ASG group 
+ select create a launch template  select application and os image  select your own image  and select your created image (owned by me)  select instance type (t2.micro)  come to the network setting  here create the security group and open port 80 or select existing security group which we have created for load balancer  which contain the port 80 opened..--> and select create launch template..
+
+4)	Now in the ASG select your launch template  click on next  choose instance launch option and select subnets where you want to create the instances  next  it will ask you  do you required this ASG needs to be attached with the load balancers  the answer is yes  select our created ALB  select target group from the load balancer  in health check option select  turn on elastic load balancing health check  select health check grace period and mention the time in second default is 300  next  
+
+select desire capacity of group  I am selecting desire capacity 2 here   scaling  minimum 1 and max I will select here 3  
+
+main select target tracking policy  here you can mention the metric (like cpu utilization and network in, network out, ALB count per target, custom cloudwatch metrics) (under target tracking scaling policy)  but for demo now I am selecting option  no scaling policy  
+
+add notification part if required like sns  next - and finally create autoscaling group..  now you can see the ASG is ready to use..  now move to the ALB load balancer  you can see the number of instances is increased here from 2 to 4 and all are in the healthy status.. 
+
+
+
+note  before ASG creation ELB is not managing the earlier instance  it is managing those instance which is created at the time of ASG or after ASG..  
+
+now move to ASG  select your group  got o instance management tab (you will get managed instance list and those are created in different AZ’s).. 
+
+ now you can stop the earlier created instances for demo purpose  
+now we have 2 instances of ASG  go to load balancer (you can see 2 instances in healthy state and 2 instances are showing as unused)  access the DNS of load balancer and got to browser (you can see that you will get the output) that means you are getting the data from the earlier instance (why you are getting) cause you are created the new instances through the AMI and used in the launch template inside ASG..
+
+Now the main task is scaling automatically 
+1)	Now you can see we have 2 running instances  now terminate 1 instance from these 2 instances  now move to the ASG and in instance management tab (you will see that from this 2 instances 1 get terminating)  now do refresh autoscaling will create new instance immediately..  now move to the ec2-dashboard  you will see that ASG created new one more instance..  that means it will keep 2 instances at any point of time.. always ..  you can see the detailed information of instance creation time and all inside the activity tab in ASG group option.. 
+
+
+!!!!!!    Perfect    !!!!!           this is how we are configuring the ASG and Load Balancing   !!!!!!!!
+
+
+
+
